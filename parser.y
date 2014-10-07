@@ -52,6 +52,7 @@ void yyerror(const char *msg); // standard error-handling routine
     List<Stmt*> *stmtList;
     List<VarDecl*> *varList;
     List<Decl*> *declList;
+    
 }
 
 
@@ -85,14 +86,32 @@ void yyerror(const char *msg); // standard error-handling routine
  * of the union named "declList" which is of type List<Decl*>.
  * pp2: You'll need to add many of these of your own.
  */
-%type <declList>  DeclList 
-%type <decl>      Decl
-%type <type>      Type 
-%type <var>       Variable VarDecl
-%type <varList>   Formals FormalList VarDecls
-%type <fDecl>     FnDecl FnHeader
-%type <stmtList>  StmtList
-%type <stmt>      StmtBlock
+ /* int integerConstant;
+    bool boolConstant;
+    char *stringConstant;
+    double doubleConstant;
+    char identifier[MaxIdentLen+1]; // +1 for terminating null
+    Decl *decl;
+    VarDecl *var;
+    FnDecl *fDecl;
+    Type *type;
+    Stmt *stmt;
+    List<Stmt*> *stmtList;
+    List<VarDecl*> *varList;
+    List<Decl*> *declList;*/
+%type <declList>          DeclList 
+%type <decl>              Decl 
+%type <type>              Type 
+%type <var>               Variable VarDecl
+%type <varList>           Formals FormalList VarDecls
+%type <fDecl>             FnDecl FnHeader
+%type <stmtList>          StmtList stmtBlock
+%type <stmt>              IfStmt WhileStmt
+%type <boolConstant>      Constant
+%type <stringConstant>    Constant
+%type <doubleConstant>    Constant
+%type <identifier>        ClassDecl FnHeader InterfaceDecl Prototype Expr LValue Call
+%type <integerConstant>   Constant
 %%
 /* Rules
  * -----
@@ -117,6 +136,8 @@ DeclList  :    DeclList Decl        { ($$=$1)->Append($2); }
 
 Decl      :    VarDecl              { $$=$1; }
           |    FnDecl               { $$=$1; }
+          |    ClassDecl            { $$=$1; }
+          |    InterfaceDecl        { $$=$1; }
 ;
 
 VarDecl   :    Variable ';'         { $$=$1; }
@@ -155,11 +176,123 @@ StmtBlock :    '{' VarDecls StmtList '}'
                                     { $$ = new StmtBlock($2, $3); }
 ;
 
-VarDecls  : VarDecls VarDecl     { ($$=$1)->Append($2); }
-          | /* empty*/           { $$ = new List<VarDecl*>; }
+VarDecls  :    VarDecls VarDecl     { ($$=$1)->Append($2); }
+          |    /* empty */          { $$ = new List<VarDecl*>; }
 ;
 
-StmtList  : /* empty, add your grammar */  { $$ = new List<Stmt*>; }
+StmtList  :    /* empty */  { $$ = new List<Stmt*>; }
+          |    Stmt Stmt    { ($$=$1)->Append($2);  }
+;
+
+ClassDecl :    identifier '<' identifier '>' '<' identifier '>' '{' '}'
+                            { ($$=new ); }
+          |    identifier '<' identifier '>' '<' identifier '>' '{' Field '}'
+	                    { (); }
+;
+
+Field     :    VarDecl     { ($$=$1)->Append($1); }
+          |    FnDecl      { ($$=$2)->Append($1); }
+
+;
+
+InterfaceDecl  :  identifier '{' '}'   { (); }
+               |  identifier '{' Prototype '}'   { (); }
+
+;
+
+Prototype  :   Type identifier '(' Formals ')' ';'   { (); }
+           |   void identifier '(' Formals ')' ';'    { (); }
+
+;
+
+Stmt       :   /* empty */ ';'
+           |   Expr ';'
+           |   IfStmt
+           |   WhileStmt
+           |   ForStmt
+           |   BreakStmt
+           |   ReturnStmt
+           |   PrintStmt
+           |   StmtBlock
+
+;
+
+IfStmt    :  if '(' Expr ')' Stmt { (); }
+          |  if '(' Expr ')' Stmt else Stmt { (); }    
+
+;
+
+WhileStmt  : while '(' Expr ')' Stmt { (); }
+
+;
+
+ForStmt   : for '(' Expr ')' Stmt { (); }
+
+;
+
+ReturnStmt    : return { (); }
+              | return Expr   { (); }
+
+;
+
+BreakStmt  : break ';'   { (); }
+
+;
+
+PrintStmt  : "Print" '(' Expr ')'    { (); }
+
+;
+
+Expr       : LValue '=' Expr 
+           | Constant
+           | LValue
+           | this
+           | Call
+           | '(' Expr ')'
+           | Expr '+' Expr
+           | Expr '-' Expr
+           | Expr '*' Expr
+           | Expr '/' Expr
+           | Expr '%' Expr
+           | '-' Expr
+           | Expr '<' Expr
+           | Expr "<=" Expr
+           | Expr '>' Expr
+           | Expr ">=" Expr
+           | Expr "==" Expr
+           | Expr "!=" Expr
+           | Expr "&&" Expr
+           | Expr "||" Expr
+           | '!' Expr
+           | ReadInteger()
+           | ReadLine()
+           | New '(' identifier ')'
+           | NewArray '(' Expr ',' Type ')'
+
+;
+
+LValue  : identifier
+        | Expr '.' identifier
+        | Expr '[' Expr ']'
+
+;
+
+Call  : identifier '(' Actuals ')'
+      | Expr '.' identifier '(' Actuals ')'
+
+;
+
+Actuals    :  /* empty */ 
+           |  Actuals ',' Expr
+
+;
+
+Constant   : intConstant
+           | doubleConstant
+           | boolConstant
+           | stringConstant
+           | null
+
 ;
 
 %%
@@ -186,5 +319,5 @@ StmtList  : /* empty, add your grammar */  { $$ = new List<Stmt*>; }
 void InitParser()
 {
    PrintDebug("parser", "Initializing parser");
-   yydebug = false;
+   bool yydebug = false;
 }
