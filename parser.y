@@ -52,7 +52,19 @@ void yyerror(const char *msg); // standard error-handling routine
     List<Stmt*> *stmtList;
     List<VarDecl*> *varList;
     List<Decl*> *declList;
-    
+    union field {
+      VarDecl *var;
+      FnDecl *fDecl;
+    };
+    struct cl {
+      char cIdent[MaxIdentLen+1];
+      char eIdent[MaxIdentLen+1];
+      
+    };
+    struct ifc { 
+      char iIdent[MaxIdentLen+1];
+  
+    };
 }
 
 
@@ -73,7 +85,6 @@ void yyerror(const char *msg); // standard error-handling routine
 %token   <integerConstant> T_IntConstant
 %token   <doubleConstant> T_DoubleConstant
 %token   <boolConstant> T_BoolConstant
-
 
 /* Non-terminal types
  * ------------------
@@ -105,13 +116,17 @@ void yyerror(const char *msg); // standard error-handling routine
 %type <var>               Variable VarDecl
 %type <varList>           Formals FormalList VarDecls
 %type <fDecl>             FnDecl FnHeader
-%type <stmtList>          StmtList stmtBlock
-%type <stmt>              IfStmt WhileStmt
-%type <boolConstant>      Constant
-%type <stringConstant>    Constant
-%type <doubleConstant>    Constant
-%type <identifier>        ClassDecl FnHeader InterfaceDecl Prototype Expr LValue Call
-%type <integerConstant>   Constant
+%type <stmtList>          StmtList StmtBlock
+%type <stmt>              Stmt IfStmt WhileStmt
+%type <boolConstant>      bC
+%type <stringConstant>    sC
+%type <doubleConstant>    dC
+%type <identifier>        ImplementIdents
+%type <integerConstant>   iC
+%type <field>             Field
+%type <cl>                ClassDecl
+%type <ifc>               InterfaceDecl
+
 %%
 /* Rules
  * -----
@@ -184,30 +199,52 @@ StmtList  :    /* empty */  { $$ = new List<Stmt*>; }
           |    Stmt Stmt    { ($$=$1)->Append($2);  }
 ;
 
-ClassDecl :    identifier '<' identifier '>' '<' identifier '>' '{' '}'
-                            { ($$=new ); }
-          |    identifier '<' identifier '>' '<' identifier '>' '{' Field '}'
-	                    { (); }
+ClassDecl :   T_Class T_Identifier '{' '}'
+	      //                            { (); }
+          |   T_Class T_Identifier '{' ClassFields '}'
+              //              { (); }
+          |   T_Class T_Identifier ClassArgs '{' '}'
+	      //              { (); }
+          |   T_Class T_Identifier ClassArgs '{' ClassFields '}'
+              //              { (); }
+
+;
+
+ImplementIdents :   T_Identifier  // { (); }
+                |   T_Identifier ImplementIdents  // { (); }
+
+;
+
+ClassFields :   Field     //{ (); }
+            |   Field ClassFields    //{ (); }
+
+;
+
+ClassArgs :   T_Extends T_Identifier   //{ (); }
+|   T_Implements ImplementIdents    //{ (); }
+|   T_Extends T_Identifier T_Implements ImplementIdents   //{ (); }
+
 ;
 
 Field     :    VarDecl     { ($$=$1)->Append($1); }
-          |    FnDecl      { ($$=$2)->Append($1); }
+          |    FnDecl      { ($$=$1)->Append($1); }
 
 ;
 
-InterfaceDecl  :  identifier '{' '}'   { (); }
-               |  identifier '{' Prototype '}'   { (); }
+InterfaceDecl  :  T_Identifier '{' '}'   //{ (); }
+|  T_Identifier '{' Prototype '}'   //{ (); }
 
 ;
 
-Prototype  :   Type identifier '(' Formals ')' ';'   { (); }
-           |   void identifier '(' Formals ')' ';'    { (); }
+Prototype  :   Type T_Identifier '(' Formals ')' ';'   //{ (); }
+|   T_Void T_Identifier '(' Formals ')' ';'    //{ (); }
 
 ;
 
 Stmt       :   /* empty */ ';'
            |   Expr ';'
            |   IfStmt
+           |   IfElseStmt
            |   WhileStmt
            |   ForStmt
            |   BreakStmt
@@ -217,36 +254,39 @@ Stmt       :   /* empty */ ';'
 
 ;
 
-IfStmt    :  if '(' Expr ')' Stmt { (); }
-          |  if '(' Expr ')' Stmt else Stmt { (); }    
+IfStmt    :  T_If '(' Expr ')' Stmt //{ (); }    
 
 ;
 
-WhileStmt  : while '(' Expr ')' Stmt { (); }
+IfElseStmt : IfStmt T_Else Stmt //{ (); }
 
 ;
 
-ForStmt   : for '(' Expr ')' Stmt { (); }
+WhileStmt  : T_While '(' Expr ')' Stmt //{ (); }
 
 ;
 
-ReturnStmt    : return { (); }
-              | return Expr   { (); }
+ForStmt   : T_For '(' Expr ')' Stmt //{ (); }
 
 ;
 
-BreakStmt  : break ';'   { (); }
+ReturnStmt    : T_Return //{ (); }
+| T_Return Expr   //{ (); }
 
 ;
 
-PrintStmt  : "Print" '(' Expr ')'    { (); }
+BreakStmt  : T_Break ';'   //{ (); }
+
+;
+
+PrintStmt  : "Print" '(' Expr ')'    //{ (); }
 
 ;
 
 Expr       : LValue '=' Expr 
            | Constant
            | LValue
-           | this
+           | T_This
            | Call
            | '(' Expr ')'
            | Expr '+' Expr
@@ -264,21 +304,21 @@ Expr       : LValue '=' Expr
            | Expr "&&" Expr
            | Expr "||" Expr
            | '!' Expr
-           | ReadInteger()
-           | ReadLine()
-           | New '(' identifier ')'
-           | NewArray '(' Expr ',' Type ')'
+           | "ReadInteger()"
+           | "ReadLine()"
+           | T_New '(' T_Identifier ')'
+           | T_NewArray '(' Expr ',' Type ')'
 
 ;
 
-LValue  : identifier
-        | Expr '.' identifier
+LValue  : T_Identifier
+        | Expr '.' T_Identifier
         | Expr '[' Expr ']'
 
 ;
 
-Call  : identifier '(' Actuals ')'
-      | Expr '.' identifier '(' Actuals ')'
+Call  : T_Identifier '(' Actuals ')'
+      | Expr '.' T_Identifier '(' Actuals ')'
 
 ;
 
@@ -287,11 +327,27 @@ Actuals    :  /* empty */
 
 ;
 
-Constant   : intConstant
-           | doubleConstant
-           | boolConstant
-           | stringConstant
-           | null
+Constant   : iC
+           | dC
+           | bC
+           | sC
+           | "null"
+
+;
+
+iC   :  T_IntConstant
+
+;
+
+dC    :  T_DoubleConstant
+
+;
+
+bC      :   T_BoolConstant
+
+;
+
+sC    : T_StringConstant
 
 ;
 
